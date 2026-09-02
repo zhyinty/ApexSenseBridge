@@ -15,12 +15,16 @@ public:
     [[nodiscard]] static std::optional<Apex5Identity> parseReply(
         std::span<const std::uint8_t> report);
     [[nodiscard]] static bool isApex5DeviceType(std::uint8_t deviceType) noexcept;
+    [[nodiscard]] static bool isApex4DeviceType(std::uint8_t deviceType) noexcept;
+    [[nodiscard]] static std::optional<Apex5Identity> parseLegacyReply(
+        std::span<const std::uint8_t> report);
 
     [[nodiscard]] std::uint8_t deviceType() const noexcept { return deviceType_; }
     [[nodiscard]] std::uint8_t connectionTypeRaw() const noexcept { return connectionType_; }
     [[nodiscard]] bool isWired() const noexcept { return connectionType_ == 1; }
     [[nodiscard]] bool isApex5() const noexcept { return isApex5DeviceType(deviceType_); }
-    [[nodiscard]] bool supportsAdaptiveTriggers() const noexcept { return isApex5(); }
+    [[nodiscard]] bool isApex4() const noexcept { return isApex4DeviceType(deviceType_); }
+    [[nodiscard]] bool supportsAdaptiveTriggers() const noexcept { return isApex5() || isApex4(); }
     [[nodiscard]] std::uint8_t batteryLevel() const noexcept { return batteryLevel_; }
     [[nodiscard]] bool isCharging() const noexcept { return charging_; }
     [[nodiscard]] std::string describe() const;

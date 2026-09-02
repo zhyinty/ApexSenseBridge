@@ -5,7 +5,12 @@
 namespace asb::dualsense {
 
 AdaptiveTriggerBridge::AdaptiveTriggerBridge(flydigi::Apex5Device& device)
-    : device_(device) {}
+    : output_([&device](const ForceTriggerCommand& command, std::string& error) {
+        return device.setTriggerRaw(command, error);
+    }) {}
+
+AdaptiveTriggerBridge::AdaptiveTriggerBridge(Output output)
+    : output_(std::move(output)) {}
 
 void AdaptiveTriggerBridge::handle(const DualSenseFeedback& feedback) {
     if (failed_.load(std::memory_order_relaxed) || feedback.kind != FeedbackKind::HidOutput) return;
@@ -49,7 +54,7 @@ void AdaptiveTriggerBridge::apply(TriggerSide side,
     }
 
     std::string writeError;
-    if (!device_.setTriggerRaw(*translated, writeError)) {
+    if (!output_ || !output_(*translated, writeError)) {
         writeFailures_.fetch_add(1, std::memory_order_relaxed);
         {
             std::lock_guard lock(errorMutex_);

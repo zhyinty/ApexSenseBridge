@@ -10,6 +10,9 @@ namespace {
 constexpr std::array<std::uint8_t, 6> kApex5DeviceTypes{
     128, 129, 133, 134, 135, 136,
 };
+constexpr std::array<std::uint8_t, 8> kApex4DeviceTypes{
+    84, 86, 87, 92, 93, 102, 103, 104,
+};
 
 constexpr std::uint8_t checksum(std::span<const std::uint8_t> bytes) noexcept {
     std::uint8_t result = 0;
@@ -63,10 +66,26 @@ bool Apex5Identity::isApex5DeviceType(std::uint8_t deviceType) noexcept {
            kApex5DeviceTypes.end();
 }
 
+bool Apex5Identity::isApex4DeviceType(std::uint8_t deviceType) noexcept {
+    return std::find(kApex4DeviceTypes.begin(), kApex4DeviceTypes.end(), deviceType) !=
+           kApex4DeviceTypes.end();
+}
+
+std::optional<Apex5Identity> Apex5Identity::parseLegacyReply(
+    std::span<const std::uint8_t> report) {
+    // Legacy DInput replies use byte 15 as the command echo. Command 0xEC's
+    // device ID is byte 3; this format is shared by the 04B4:2412 family.
+    if (report.size() < 16 || report[15] != kLegacyCmdGetInfo) return std::nullopt;
+    const auto rawBattery = report[11];
+    return Apex5Identity(report[3], report[13], rawBattery, false);
+}
+
 std::string Apex5Identity::describe() const {
     std::ostringstream output;
     if (isApex5()) {
         output << "Apex 5 (k5, DeviceType " << static_cast<unsigned int>(deviceType_) << ')';
+    } else if (isApex4()) {
+        output << "Apex 4 (k2, DeviceType " << static_cast<unsigned int>(deviceType_) << ')';
     } else {
         output << "unsupported Flydigi controller (DeviceType "
                << static_cast<unsigned int>(deviceType_) << ')';

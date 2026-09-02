@@ -144,7 +144,7 @@ int main() {
     auto silent = makeDevice(silentTransport, 128, true);
     error.clear();
     assert(!silent.verifyIdentity(error));
-    assert(error.find("No valid command 0x01") != std::string::npos);
+    assert(error.find("No valid Flydigi identity reply") != std::string::npos);
     assert(silentTransport->writes.size() == 1);
 
     std::cout << "Identity guard tests passed\n";

@@ -32,6 +32,7 @@ add_library(asb_core STATIC
     src/flydigi/Apex5Identity.cpp
     src/flydigi/Apex5Protocol.cpp
     src/flydigi/Apex5Device.cpp
+    src/flydigi/SpaceStationUdp.cpp
 )
 target_include_directories(asb_core PUBLIC src)
 

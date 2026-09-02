@@ -68,6 +68,18 @@ int main() {
         assert(rumble[index] == 0);
     }
 
+    const auto legacyInfo = buildLegacyGetInfo();
+    assert(legacyInfo[0] == 5);
+    assert(legacyInfo[1] == kLegacyCmdGetInfo);
+
+    const auto legacyNormal = buildLegacyForceTrigger(
+        TriggerEffect{TriggerSide::Left, TriggerMode::Normal});
+    assert(legacyNormal[0] == 5);
+    assert(legacyNormal[1] == kLegacyCmdSetForceTrigger);
+    assert(legacyNormal[2] == 1); // apply flag
+    assert(legacyNormal[3] == 1); // left
+    assert(legacyNormal[4] == 0); // normal
+
     std::cout << "Protocol tests passed\n";
     return 0;
 }

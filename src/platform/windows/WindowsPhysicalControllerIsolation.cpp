@@ -159,7 +159,11 @@ std::vector<std::wstring> fromMultiString(const wchar_t* data,
 
 bool openHidHide(ScopedHandle& device, std::string& error) {
     const HANDLE handle = CreateFileW(
-        kHidHideDevice, GENERIC_READ,
+        // HidHide 1.5.x rejects a read-only handle even for callers that are
+        // elevated. Isolation snapshots and restores configuration, so open
+        // the control device with the same read/write access the official CLI
+        // uses before issuing its IOCTLs.
+        kHidHideDevice, GENERIC_READ | GENERIC_WRITE,
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
         nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (handle == INVALID_HANDLE_VALUE) {
@@ -552,6 +556,8 @@ bool apexGameDevicePaths(const HidDeviceInfo& apexInterface,
        << std::setfill(L'0') << apexInterface.vendorId << L"&PID_"
        << std::setw(4) << apexInterface.productId;
     const auto expectedId = id.str();
+    const bool legacyDInput = apexInterface.vendorId == 0x04B4 &&
+                              apexInterface.productId == 0x2412;
     bool foundHidGamepad = false;
     bool foundXInput = false;
 
@@ -568,7 +574,8 @@ bool apexGameDevicePaths(const HidDeviceInfo& apexInterface,
         const auto normalized = upper(instance);
         if (normalized.find(expectedId) == std::wstring::npos) continue;
         const bool hidGamepad = normalized.starts_with(L"HID\\") &&
-                                normalized.find(L"&IG_") != std::wstring::npos;
+            (legacyDInput ? normalized.find(L"&MI_00") != std::wstring::npos
+                          : normalized.find(L"&IG_") != std::wstring::npos);
         const bool xinput = normalized.starts_with(L"USB\\") &&
                             normalized.find(L"&MI_00") != std::wstring::npos;
         if (hidGamepad || xinput) {
@@ -577,9 +584,10 @@ bool apexGameDevicePaths(const HidDeviceInfo& apexInterface,
             foundXInput = foundXInput || xinput;
         }
     }
-    if (!foundHidGamepad || !foundXInput) {
-        error = "Could not identify both the HID and XInput game interfaces of "
-                "the selected APEX; refusing to hide a broader device group.";
+    if (!foundHidGamepad || (!legacyDInput && !foundXInput)) {
+        error = legacyDInput
+            ? "Could not identify the selected APEX 4 DInput game interface; refusing to hide a broader device group."
+            : "Could not identify both the HID and XInput game interfaces of the selected APEX; refusing to hide a broader device group.";
         return false;
     }
     return true;

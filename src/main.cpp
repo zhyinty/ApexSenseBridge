@@ -8,6 +8,7 @@
 #include "dualsense/RumbleBridge.h"
 #include "dualsense/TouchpadGestureProfile.h"
 #include "flydigi/Apex5Device.h"
+#include "flydigi/SpaceStationUdp.h"
 #include "flydigi/Apex5Protocol.h"
 #include "platform/HidTransport.h"
 #include "platform/AudioEndpointProtection.h"
@@ -341,10 +342,11 @@ void printUsage() {
         << "                  [--virtual-backend auto|integrated|sidecar]\n"
         << "                  [--touchpad-profile NAME]\n"
         << "                  [--view-hold-swipe-up]\n"
-        << "                  [--isolate-apex]\n"
+        << "                  [--isolate-apex] [--space-station]\n"
         << "                  [--session-token 32HEX]\n"
         << "                               Route adaptive triggers and optional grip/audio haptics\n"
         << "  test-rt [index]              Gentle RT FORCEADAPT test (~1.5 s)\n"
+        << "  test-lock [index]            Strong RT lock test; resets automatically (~1.5 s)\n"
         << "  test-rumble [index]          Gentle grip-motor vibration test (~1 s)\n"
         << "  xinput-view-test [index] [--seconds N]\n"
         << "                               Measure View/Back hold duration without writes\n"
@@ -787,6 +789,7 @@ struct BridgeCommandOptions {
     bool routeRumble = false;
     bool verifyVirtualInput = false;
     bool isolateApex = true;
+    bool spaceStation = false;
     asb::dualsense::TouchpadGestureProfile touchpadProfile =
         asb::dualsense::TouchpadGestureProfile::None;
     bool touchpadProfileExplicit = false;
@@ -870,6 +873,9 @@ bool parseBridgeOptions(int argc, char** argv, BridgeCommandOptions& options,
         } else if (value == "--isolate-apex") {
             options.isolateApex = true;
             options.proxyXInput = true;
+        } else if (value == "--space-station") {
+            options.spaceStation = true;
+            options.proxyXInput = true;
         } else if (value == "--xinput-index") {
             if (++i >= argc) { error = "--xinput-index requires a value from 0 to 3."; return false; }
             try {
@@ -904,7 +910,7 @@ bool parseBridgeOptions(int argc, char** argv, BridgeCommandOptions& options,
     // A DualSense session is always a complete physical-input proxy. These
     // invariants are enforced by the engine, not merely by the Playnite UI.
     options.proxyXInput = true;
-    options.isolateApex = true;
+    options.isolateApex = !options.spaceStation;
     return true;
 }
 
@@ -914,7 +920,7 @@ int commandBridgeTriggers(int argc, char** argv) {
     BridgeCommandOptions options{};
     std::string error;
     if (!parseBridgeOptions(argc, argv, options, error)) {
-        std::cerr << error << "\nUsage: ApexSenseBridge bridge-triggers [index] [--seconds N] [--viiper PATH] [--virtual-backend auto|integrated|sidecar] [--telemetry-json PATH] [--proxy-xinput] [--xinput-index 0..3] [--rumble] [--haptic-threshold 0..95] [--verify-virtual-input] [--touchpad-profile NAME] [--view-hold-swipe-up] [--isolate-apex] [--session-token 32HEX]\n";
+        std::cerr << error << "\nUsage: ApexSenseBridge bridge-triggers [index] [--seconds N] [--viiper PATH] [--virtual-backend auto|integrated|sidecar] [--telemetry-json PATH] [--proxy-xinput] [--xinput-index 0..3] [--rumble] [--haptic-threshold 0..95] [--verify-virtual-input] [--touchpad-profile NAME] [--view-hold-swipe-up] [--isolate-apex] [--space-station] [--session-token 32HEX]\n";
         return 1;
     }
 
@@ -951,19 +957,26 @@ int commandBridgeTriggers(int argc, char** argv) {
         return exitCode;
     };
 
-    auto device = openSelectedIndex(options.deviceIndex, error);
-    if (!device) {
+    auto device = options.spaceStation
+        ? decltype(openSelectedIndex(options.deviceIndex, error)){}
+        : openSelectedIndex(options.deviceIndex, error);
+    if (!options.spaceStation && !device) {
         const std::string message = "APEX identity check failed: " + error;
         std::cerr << message << '\n';
         return failSession(3, message);
     }
-    asb::TriggerResetGuard resetOnExit(*device);
-    if (!device->clearAll(error)) {
+    asb::flydigi::SpaceStationUdp spaceStation;
+    std::unique_ptr<asb::TriggerResetGuard> resetOnExit;
+    if (device) resetOnExit = std::make_unique<asb::TriggerResetGuard>(*device);
+    if (options.spaceStation ? !spaceStation.clearAll(error) : !device->clearAll(error)) {
         std::cerr << "Could not establish a Normal trigger baseline: " << error << '\n';
         return failSession(4, "Could not establish a Normal trigger baseline: " + error);
     }
 
     std::unique_ptr<asb::RumbleResetGuard> rumbleResetOnExit;
+    if (options.spaceStation && options.routeRumble) {
+        return failSession(12, "--rumble is not supported by the Space Station trigger transport.");
+    }
     if (options.routeRumble) {
         if (!device->stopRumble(error)) {
             std::cerr << "Could not establish a stopped grip-rumble baseline: "
@@ -973,8 +986,17 @@ int commandBridgeTriggers(int argc, char** argv) {
         rumbleResetOnExit = std::make_unique<asb::RumbleResetGuard>(*device);
     }
 
+    asb::HidDeviceInfo inputDevice{};
+    if (options.spaceStation) {
+        inputDevice.vendorId = 0x045E;
+        inputDevice.productId = 0x028E;
+        inputDevice.product = L"Flydigi APEX 4 (XInput)";
+        if (!options.xinputIndex) options.xinputIndex = 0;
+    } else {
+        inputDevice = device->info();
+    }
     auto inputSource = asb::platform::openPhysicalInputSource(
-        device->info(), options.xinputIndex, error);
+        inputDevice, options.xinputIndex, error);
     if (!inputSource) {
         std::cerr << "Mandatory physical-input proxy creation failed: " << error << '\n';
         return failSession(8, "Mandatory physical-input proxy creation failed: " + error);
@@ -1003,7 +1025,16 @@ int commandBridgeTriggers(int argc, char** argv) {
                   << audioProtectionError << '\n';
     }
 
-    asb::dualsense::AdaptiveTriggerBridge bridge(*device);
+    asb::dualsense::AdaptiveTriggerBridge bridge(
+        options.spaceStation
+            ? asb::dualsense::AdaptiveTriggerBridge::Output(
+                  [&spaceStation](const auto& command, std::string& outputError) {
+                      return spaceStation.send(command, outputError);
+                  })
+            : asb::dualsense::AdaptiveTriggerBridge::Output(
+                  [&device](const auto& command, std::string& outputError) {
+                      return device->setTriggerRaw(command, outputError);
+                  }));
     asb::haptics::HapticConfig hapticConfig{};
     hapticConfig.activationThreshold =
         static_cast<double>(options.hapticThresholdPercent) / 100.0;
@@ -1082,7 +1113,7 @@ int commandBridgeTriggers(int argc, char** argv) {
     }
 
     asb::platform::TemporaryPhysicalControllerIsolation physicalIsolation;
-    if (!physicalIsolation.activate(
+    if (options.isolateApex && !physicalIsolation.activate(
             device->info(), options.sessionToken.value_or(""), error)) {
         virtualDualSense->close();
         std::cerr << "Temporary APEX isolation failed: " << error << '\n';
@@ -1120,7 +1151,9 @@ int commandBridgeTriggers(int argc, char** argv) {
             isolationReadyAt - firmwareCheckedAt).count();
     const auto processUsageStarted = processUsageSnapshot();
 
-    std::cout << "APEX verified: " << device->identity()->describe() << '\n'
+    std::cout << "APEX verified: "
+              << (options.spaceStation ? "Apex 4 via Flydigi Space Station"
+                                       : device->identity()->describe()) << '\n'
               << "Adaptive-trigger routing enabled.\n"
               << (rumbleBridge
                       ? "Grip-rumble and DualSense audio-haptics routing enabled.\n"
@@ -1375,8 +1408,10 @@ int commandBridgeTriggers(int argc, char** argv) {
     const bool rumbleResetOk = !rumbleBridge || device->stopRumble(rumbleResetError);
     if (rumbleResetOk && rumbleResetOnExit) rumbleResetOnExit->dismiss();
     std::string resetError;
-    const bool resetOk = device->clearAll(resetError);
-    if (resetOk) resetOnExit.dismiss();
+    const bool resetOk = options.spaceStation
+        ? spaceStation.clearAll(resetError)
+        : device->clearAll(resetError);
+    if (resetOk && resetOnExit) resetOnExit->dismiss();
     // Keep HidHide active until launch-capable controls have been released for
     // a short stable interval. The wait is bounded so disconnects and damaged
     // devices can never prevent restoration/uninstall.
@@ -1818,6 +1853,47 @@ int commandTestRt(int argc, char** argv) {
     return 0;
 }
 
+int commandTestLock(int argc, char** argv) {
+    std::string error;
+    auto device = openSelected(argc, argv, error);
+    if (!device) {
+        std::cerr << "Error: " << error << "\n";
+        return 3;
+    }
+
+    std::cout << "Using: " << narrowAscii(device->info().product) << " ("
+              << hex16(device->info().vendorId) << ':' << hex16(device->info().productId) << ")\n";
+    std::cout << "Applying a STRONG RT lock at about 35% travel for 1.5 seconds...\n";
+
+    asb::TriggerResetGuard resetOnExit(*device);
+    asb::TriggerEffect effect{};
+    effect.side = asb::TriggerSide::Right;
+    effect.mode = asb::TriggerMode::Lock;
+    effect.start = 90;
+    effect.matchInput = false;
+    if (!device->setTrigger(effect, error)) {
+        std::cerr << "Write failed: " << error << "\n";
+        return 4;
+    }
+
+    constexpr auto duration = std::chrono::milliseconds(1500);
+    constexpr auto slice = std::chrono::milliseconds(25);
+    auto elapsed = std::chrono::milliseconds::zero();
+    while (elapsed < duration && !g_stopRequested.load(std::memory_order_relaxed)) {
+        std::this_thread::sleep_for(slice);
+        elapsed += slice;
+    }
+
+    if (!device->clearAll(error)) {
+        std::cerr << "WARNING: automatic reset write failed: " << error << "\n"
+                  << "Open Flydigi Space Station and set both triggers to Normal before continuing.\n";
+        return 5;
+    }
+    resetOnExit.dismiss();
+    std::cout << "RT reset to Normal.\n";
+    return 0;
+}
+
 int commandTestRumble(int argc, char** argv) {
     std::string error;
     auto device = openSelected(argc, argv, error);
@@ -2037,6 +2113,9 @@ int main(int argc, char** argv) {
     }
     if (command == "test-rt") {
         return commandTestRt(argc, argv);
+    }
+    if (command == "test-lock") {
+        return commandTestLock(argc, argv);
     }
     if (command == "test-rumble") {
         return commandTestRumble(argc, argv);

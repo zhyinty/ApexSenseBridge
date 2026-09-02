@@ -42,6 +42,9 @@ constexpr USAGE kUsageDpadUp = 0x90;
 constexpr USAGE kUsageDpadDown = 0x91;
 constexpr USAGE kUsageDpadRight = 0x92;
 constexpr USAGE kUsageDpadLeft = 0x93;
+constexpr USHORT kUsagePageSimulation = 0x02;
+constexpr USAGE kUsageAccelerator = 0xC4;
+constexpr USAGE kUsageBrake = 0xC5;
 
 std::string win32Error(DWORD code) {
     LPSTR buffer = nullptr;
@@ -273,15 +276,29 @@ private:
         }
         buttonCaps_.resize(buttonCount);
 
-        const auto hasValue = [this](USAGE usage) {
+        const auto hasValue = [this](USHORT page, USAGE usage) {
             return std::any_of(valueCaps_.begin(), valueCaps_.end(),
-                               [usage](const auto& cap) {
-                                   return cap.UsagePage == kUsagePageGenericDesktop &&
+                               [page, usage](const auto& cap) {
+                                   return cap.UsagePage == page &&
                                           containsUsage(cap, usage);
                                });
         };
-        if (!hasValue(kUsageX) || !hasValue(kUsageY) || !hasValue(kUsageRx) ||
-            !hasValue(kUsageRy) || !hasValue(kUsageZ) || !hasValue(kUsageRz)) {
+        const bool modernLayout = hasValue(kUsagePageGenericDesktop, kUsageX) &&
+            hasValue(kUsagePageGenericDesktop, kUsageY) &&
+            hasValue(kUsagePageGenericDesktop, kUsageRx) &&
+            hasValue(kUsagePageGenericDesktop, kUsageRy) &&
+            hasValue(kUsagePageGenericDesktop, kUsageZ) &&
+            hasValue(kUsagePageGenericDesktop, kUsageRz);
+        // APEX 4's DInput report uses X/Y/Z/Rz for the two sticks and the
+        // Simulation Controls accelerator/brake usages for its triggers.
+        legacyApex4Layout_ = !modernLayout &&
+            hasValue(kUsagePageGenericDesktop, kUsageX) &&
+            hasValue(kUsagePageGenericDesktop, kUsageY) &&
+            hasValue(kUsagePageGenericDesktop, kUsageZ) &&
+            hasValue(kUsagePageGenericDesktop, kUsageRz) &&
+            hasValue(kUsagePageSimulation, kUsageAccelerator) &&
+            hasValue(kUsagePageSimulation, kUsageBrake);
+        if (!modernLayout && !legacyApex4Layout_) {
             std::ostringstream details;
             details << "The APEX HID descriptor does not expose the complete X/Y/Rx/Ry/Z/Rz "
                        "state required for a lossless DualSense proxy. Available value usages:";
@@ -320,15 +337,15 @@ private:
         return false;
     }
 
-    bool usageValue(USAGE usage, ULONG& raw,
+    bool usageValue(USHORT page, USAGE usage, ULONG& raw,
                     const HIDP_VALUE_CAPS*& matched) const noexcept {
         for (const auto& cap : valueCaps_) {
-            if (cap.UsagePage != kUsagePageGenericDesktop ||
+            if (cap.UsagePage != page ||
                 !containsUsage(cap, usage)) {
                 continue;
             }
             const auto status = HidP_GetUsageValue(
-                HidP_Input, kUsagePageGenericDesktop, cap.LinkCollection,
+                HidP_Input, page, cap.LinkCollection,
                 usage, &raw, preparsed_,
                 reinterpret_cast<PCHAR>(const_cast<std::uint8_t*>(report_.data())),
                 static_cast<ULONG>(report_.size()));
@@ -368,26 +385,39 @@ private:
     bool genericDesktopButton(USAGE usage) const noexcept {
         ULONG raw = 0;
         const HIDP_VALUE_CAPS* cap = nullptr;
-        return usageValue(usage, raw, cap) && raw != 0;
+        return usageValue(kUsagePageGenericDesktop, usage, raw, cap) && raw != 0;
     }
 
     bool parseReport(DWORD bytesRead, dualsense::DualSenseInputState& state,
                      std::string& error) {
         (void)bytesRead;
         dualsense::DualSenseInputState decoded{};
-        const auto readAxis = [this, &error](USAGE usage, std::uint8_t& target) {
+        const auto readAxis = [this, &error](USHORT page, USAGE usage,
+                                             std::uint8_t& target) {
             ULONG raw = 0;
             const HIDP_VALUE_CAPS* cap = nullptr;
-            if (!usageValue(usage, raw, cap) || !cap) {
+            if (!usageValue(page, usage, raw, cap) || !cap) {
                 error = "An expected APEX HID axis was missing from an input report.";
                 return false;
             }
             target = normalizeByte(raw, *cap);
             return true;
         };
-        if (!readAxis(kUsageX, decoded.lx) || !readAxis(kUsageY, decoded.ly) ||
-            !readAxis(kUsageRx, decoded.rx) || !readAxis(kUsageRy, decoded.ry) ||
-            !readAxis(kUsageZ, decoded.l2) || !readAxis(kUsageRz, decoded.r2)) {
+        const auto desktop = kUsagePageGenericDesktop;
+        const bool axesOk = legacyApex4Layout_
+            ? readAxis(desktop, kUsageX, decoded.lx) &&
+              readAxis(desktop, kUsageY, decoded.ly) &&
+              readAxis(desktop, kUsageZ, decoded.rx) &&
+              readAxis(desktop, kUsageRz, decoded.ry) &&
+              readAxis(kUsagePageSimulation, kUsageBrake, decoded.l2) &&
+              readAxis(kUsagePageSimulation, kUsageAccelerator, decoded.r2)
+            : readAxis(desktop, kUsageX, decoded.lx) &&
+              readAxis(desktop, kUsageY, decoded.ly) &&
+              readAxis(desktop, kUsageRx, decoded.rx) &&
+              readAxis(desktop, kUsageRy, decoded.ry) &&
+              readAxis(desktop, kUsageZ, decoded.l2) &&
+              readAxis(desktop, kUsageRz, decoded.r2);
+        if (!axesOk) {
             return false;
         }
 
@@ -405,7 +435,7 @@ private:
 
         ULONG hat = 0;
         const HIDP_VALUE_CAPS* hatCap = nullptr;
-        if (usageValue(kUsageHatSwitch, hat, hatCap) && hatCap) {
+        if (usageValue(kUsagePageGenericDesktop, kUsageHatSwitch, hat, hatCap) && hatCap) {
             const auto direction = signedLogicalValue(hat, *hatCap) - hatCap->LogicalMin;
             if (direction == 0 || direction == 1 || direction == 7)
                 xinputButtons |= xinputButton::kDpadUp;
@@ -442,6 +472,7 @@ private:
     std::vector<std::uint8_t> report_;
     std::vector<HIDP_VALUE_CAPS> valueCaps_;
     std::vector<HIDP_BUTTON_CAPS> buttonCaps_;
+    bool legacyApex4Layout_ = false;
     PhysicalInputSourceStats stats_{};
 };
 

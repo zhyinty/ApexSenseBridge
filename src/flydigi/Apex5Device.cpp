@@ -24,9 +24,8 @@ std::vector<HidDeviceInfo> Apex5Device::findCandidates(std::string& error) {
     std::vector<HidDeviceInfo> candidates;
 
     std::copy_if(all.begin(), all.end(), std::back_inserter(candidates), [](const HidDeviceInfo& info) {
-        return info.vendorId == kVendorId &&
-               isControllerProduct(info.productId) &&
-               info.usagePage == kVendorUsagePage;
+        return (info.vendorId == kVendorId && isControllerProduct(info.productId) &&
+                info.usagePage == kVendorUsagePage) || isLegacyController(info);
     });
 
     return candidates;
@@ -87,15 +86,18 @@ bool Apex5Device::verifyIdentity(std::string& error) {
         }
     }
 
-    const auto request = Apex5Identity::buildRequest();
+    const bool legacy = isLegacyController(transport_->info());
+    const auto request = legacy ? buildLegacyGetInfo() : Apex5Identity::buildRequest();
     if (!transport_->writeOutputReport(request, error)) {
         error = "Could not send the read-only Flydigi identity request: " + error;
         return false;
     }
 
-    constexpr auto kIdentityTimeout = std::chrono::milliseconds(600);
+    const auto identityTimeout = legacy ? std::chrono::milliseconds(1000)
+                                        : std::chrono::milliseconds(600);
     constexpr std::size_t kMaximumReplies = 4096;
-    const auto deadline = std::chrono::steady_clock::now() + kIdentityTimeout;
+    const auto deadline = std::chrono::steady_clock::now() + identityTimeout;
+    std::size_t legacyAttempts = 1;
     for (std::size_t count = 0; count < kMaximumReplies; ++count) {
         const auto now = std::chrono::steady_clock::now();
         if (now >= deadline) {
@@ -106,10 +108,25 @@ bool Apex5Device::verifyIdentity(std::string& error) {
             remaining = std::chrono::milliseconds(1);
         }
 
+        const auto readTimeout = legacy
+            ? (std::min)(remaining, std::chrono::milliseconds(125))
+            : remaining;
         std::size_t bytesRead = 0;
         std::string readError;
-        const auto status = transport_->readInputReport(input, remaining, bytesRead, readError);
+        const auto status = transport_->readInputReport(input, readTimeout, bytesRead, readError);
         if (status == platform::HidReadStatus::Timeout) {
+            // Older 04B4:2412 firmware occasionally drops the first command
+            // after a handle is opened. Retry the read-only identity query;
+            // no effect command is ever sent before identity succeeds.
+            if (legacy && legacyAttempts < 4) {
+                if (!transport_->writeOutputReport(request, error)) {
+                    error = "Could not retry the read-only Flydigi identity request: " + error;
+                    return false;
+                }
+                ++legacyAttempts;
+                continue;
+            }
+            if (legacy) continue;
             break;
         }
         if (status == platform::HidReadStatus::Error) {
@@ -117,21 +134,22 @@ bool Apex5Device::verifyIdentity(std::string& error) {
             return false;
         }
 
-        const auto parsed = Apex5Identity::parseReply(
-            std::span<const std::uint8_t>(input.data(), bytesRead));
+        const auto bytes = std::span<const std::uint8_t>(input.data(), bytesRead);
+        const auto parsed = legacy ? Apex5Identity::parseLegacyReply(bytes)
+                                   : Apex5Identity::parseReply(bytes);
         if (!parsed) {
             continue;
         }
-        if (!parsed->isApex5() || !parsed->supportsAdaptiveTriggers()) {
+        if (!parsed->supportsAdaptiveTriggers()) {
             error = "Identity refused: found " + parsed->describe() +
-                    "; adaptive-trigger writes require an Apex 5 (k5).";
+                    "; adaptive-trigger writes require an Apex 4 (k2) or Apex 5 (k5).";
             return false;
         }
         identity_ = *parsed;
         return true;
     }
 
-    error = "No valid command 0x01 identity reply arrived within 600 ms; "
+    error = "No valid Flydigi identity reply arrived within 600 ms; "
             "wake the controller and close Flydigi Space Station before retrying";
     return false;
 }
@@ -141,9 +159,9 @@ bool Apex5Device::mayWriteEffects(std::string& error) const {
         error = "Effect write refused: device identity was not verified";
         return false;
     }
-    if (!identity_->isApex5() || !identity_->supportsAdaptiveTriggers()) {
+    if (!identity_->supportsAdaptiveTriggers()) {
         error = "Effect write refused: " + identity_->describe() +
-                " is not a verified Apex 5";
+                " is not a verified Apex 4 or Apex 5";
         return false;
     }
     return true;
@@ -157,7 +175,8 @@ bool Apex5Device::setTrigger(const TriggerEffect& effect, std::string& error) {
     if (!mayWriteEffects(error)) {
         return false;
     }
-    const auto report = buildForceTrigger(effect, true);
+    const auto report = isLegacyController(transport_->info())
+        ? buildLegacyForceTrigger(effect, true) : buildForceTrigger(effect, true);
     return transport_->writeOutputReport(report, error);
 }
 
@@ -169,7 +188,9 @@ bool Apex5Device::setTriggerRaw(const ForceTriggerCommand& command, std::string&
     if (!mayWriteEffects(error)) {
         return false;
     }
-    return transport_->writeOutputReport(buildForceTriggerRaw(command, true), error);
+    const auto report = isLegacyController(transport_->info())
+        ? buildLegacyForceTriggerRaw(command, true) : buildForceTriggerRaw(command, true);
+    return transport_->writeOutputReport(report, error);
 }
 
 bool Apex5Device::clearTrigger(TriggerSide side, std::string& error) {
@@ -180,7 +201,9 @@ bool Apex5Device::clearTrigger(TriggerSide side, std::string& error) {
     if (!mayWriteEffects(error)) {
         return false;
     }
-    const auto report = buildNormal(side);
+    const auto report = isLegacyController(transport_->info())
+        ? buildLegacyForceTrigger(TriggerEffect{side, TriggerMode::Normal}, true)
+        : buildNormal(side);
     return transport_->writeOutputReport(report, error);
 }
 

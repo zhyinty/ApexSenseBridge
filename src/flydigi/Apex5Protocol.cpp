@@ -36,6 +36,11 @@ bool isControllerProduct(std::uint16_t productId) noexcept {
     return (productId >> 12U) == kControllerProductFamily;
 }
 
+bool isLegacyController(const HidDeviceInfo& info) noexcept {
+    return info.vendorId == kLegacyVendorId && info.productId == kLegacyProductId &&
+           info.usagePage == kVendorUsagePage && info.outputReportLength >= 12;
+}
+
 Report buildForceTrigger(const TriggerEffect& effect, bool apply) {
     const auto side = static_cast<std::uint8_t>(effect.side);
     const auto mode = static_cast<std::uint8_t>(effect.mode);
@@ -116,6 +121,31 @@ Report buildRumble(std::uint8_t lowFrequencyMotor,
     report[5] = lowFrequencyMotor;
     report[6] = highFrequencyMotor;
     return report;
+}
+
+Report buildLegacyGetInfo() {
+    Report report{};
+    report[0] = 5;
+    report[1] = kLegacyCmdGetInfo;
+    return report;
+}
+
+Report buildLegacyForceTrigger(const TriggerEffect& effect, bool apply) {
+    const auto modern = buildForceTrigger(effect, apply);
+    Report legacy{};
+    legacy[0] = 5;
+    legacy[1] = kLegacyCmdSetForceTrigger;
+    std::copy(modern.begin() + 5, modern.begin() + 15, legacy.begin() + 2);
+    return legacy;
+}
+
+Report buildLegacyForceTriggerRaw(const ForceTriggerCommand& command, bool apply) {
+    const auto modern = buildForceTriggerRaw(command, apply);
+    Report legacy{};
+    legacy[0] = 5;
+    legacy[1] = kLegacyCmdSetForceTrigger;
+    std::copy(modern.begin() + 5, modern.begin() + 15, legacy.begin() + 2);
+    return legacy;
 }
 
 } // namespace asb::flydigi

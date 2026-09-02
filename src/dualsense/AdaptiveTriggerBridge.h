@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -27,7 +28,9 @@ struct AdaptiveTriggerBridgeStats {
 
 class AdaptiveTriggerBridge {
 public:
+    using Output = std::function<bool(const ForceTriggerCommand&, std::string&)>;
     explicit AdaptiveTriggerBridge(flydigi::Apex5Device& device);
+    explicit AdaptiveTriggerBridge(Output output);
     void handle(const DualSenseFeedback& feedback);
     [[nodiscard]] bool failed() const noexcept;
     [[nodiscard]] std::string error() const;
@@ -36,7 +39,7 @@ public:
 private:
     void apply(TriggerSide side, const std::array<std::uint8_t, 11>& effect);
 
-    flydigi::Apex5Device& device_;
+    Output output_;
     std::uint8_t leftMotor_ = 0;
     std::optional<ForceTriggerCommand> lastLeft_;
     std::optional<ForceTriggerCommand> lastRight_;

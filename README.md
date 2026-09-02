@@ -1,6 +1,6 @@
 # ApexSenseBridge 0.5.0
 
-ApexSenseBridge gives a Flydigi APEX 5 a virtual DualSense path on Windows while translating native adaptive-trigger and haptic feedback back to the physical controller.
+ApexSenseBridge gives Flydigi APEX 4 and APEX 5 controllers a virtual DualSense path on Windows while translating native adaptive-trigger feedback back to the physical controller. APEX 5 uses its vendor HID protocol; APEX 4 uses Flydigi Space Station's local adapter protocol while the controller remains in XInput mode.
 
 ## Locked runtime architecture
 
@@ -19,6 +19,26 @@ APEX physical ── HID/XInput ──► ApexSenseBridge ──► virtual Dual
 In DualSense mode the game never receives sticks, buttons, triggers or D-pad input directly from the physical APEX. ApexSenseBridge reads and translates the complete state. Direct HID means direct input to the bridge, not direct input to the game. If the lossless proxy or physical isolation cannot be established, Playnite cancels the game launch.
 
 Recognized games receive their verified profile automatically. Unknown and explicitly disabled games retain their native APEX XInput path and do not start the engine, sidecar, service or tray application.
+
+## APEX 4 support
+
+APEX 4 must remain in **XInput mode**, and Flydigi Space Station must be running. In this mode Windows exposes the controller as an Xbox 360-compatible device (it may contain `FLYDIGI_VADER3` in its device instance name; this does not mean the hardware is a Vader controller).
+
+The APEX 4 path keeps the virtual DualSense device. Input and feedback flow as follows:
+
+```text
+APEX 4 XInput -> ApexSenseBridge -> virtual DualSense -> game
+game native DualSense trigger output -> ApexSenseBridge -> 127.0.0.1:7878
+                                                   -> Flydigi Space Station -> APEX 4
+```
+
+Start a manual APEX 4 bridge session with:
+
+```powershell
+.\ApexSenseBridge.exe bridge-triggers --space-station --xinput-index 0
+```
+
+`--space-station` does not require the APEX 4 DInput vendor HID interface and does not hide the physical XInput controller through HidHide. It currently routes adaptive triggers only; `--rumble` is rejected in this mode. Normal shutdown and error unwinding send Normal-mode commands to both triggers. Close the bridge cleanly with `Ctrl+C` or `ApexSenseBridge.exe stop-active-sessions`.
 
 ## Verified and tested games
 
@@ -56,6 +76,20 @@ as administrator, restart Windows, then launch `Start-ApexSenseBridge.cmd`.
 The application payload is portable, but the USBip and HidHide kernel drivers necessarily remain system-wide Windows components. The portable helper preserves a healthy compatible existing installation and refuses ambiguous USBip upgrades rather than entering the upstream uninstaller hang. Use the regular setup when automatic Playnite integration, shortcuts, startup registration, and Windows uninstall metadata are wanted.
 
 The lightweight `ApexSenseBridgeControl.exe` panel can test APEX detection, restore HidHide/controller visibility, open logs and start an explicit full dependency removal. It is not resident in memory.
+
+### APEX 4 Mini portable ZIP
+
+For a machine that already has Flydigi Space Station and usbip-win2 installed,
+build the minimal APEX 4 package with:
+
+```powershell
+.\scripts\build-mini-portable.ps1
+```
+
+`ApexSenseBridge-APEX4-Mini-Portable.zip` contains only the bridge executable,
+integrated `libVIIPER.dll` backend, start/stop helpers, and required notices. It
+does not include Playnite, the tray/control applications, HidHide, driver
+installers, or the VIIPER sidecar.
 
 ## Standalone Tray App (Outside Playnite)
 
@@ -236,14 +270,15 @@ bridge-triggers [index] [--seconds N] [--viiper PATH]
                 [--telemetry-json PATH] [--xinput-index 0..3]
                 [--rumble] [--haptic-threshold 0..95]
                 [--verify-virtual-input] [--touchpad-profile NAME]
-                [--view-hold-swipe-up] [--session-token 32HEX]
+                [--view-hold-swipe-up] [--space-station]
+                [--session-token 32HEX]
 test-rt [index]
 test-rumble [index]
 clear [index]
 restore-controller-visibility
 ```
 
-`bridge-triggers` always enforces full proxying and physical isolation in 0.5.0, including when legacy `--proxy-xinput` or `--isolate-apex` flags are omitted. A session failure is fail-closed: the game is never allowed to fall back to a visible physical APEX during a DualSense profile.
+`bridge-triggers` enforces full proxying and physical isolation for the native APEX 5 path, including when legacy `--proxy-xinput` or `--isolate-apex` flags are omitted. The APEX 4 `--space-station` path deliberately keeps its XInput source visible because Flydigi Space Station needs that mode and transport.
 
 `--virtual-backend` is an advanced validation switch. Normal users should leave
 the default `auto`; `integrated` and `sidecar` force one implementation so the
