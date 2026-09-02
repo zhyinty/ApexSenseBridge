@@ -23,6 +23,24 @@ if (-not (Test-IsAdministrator)) {
     exit $elevated.ExitCode
 }
 
+$startupLog = Join-Path $PSScriptRoot "Start-APEX4-Mini.log"
+$transcriptStarted = $false
+try {
+    Start-Transcript -LiteralPath $startupLog -Append | Out-Null
+    $transcriptStarted = $true
+}
+catch {}
+
+trap {
+    Write-Host ""
+    Write-Host ("Startup failed: " + $_.Exception.Message) -ForegroundColor Red
+    Write-Host ("Detailed log: " + $startupLog) -ForegroundColor Yellow
+    if ($transcriptStarted) {
+        try { Stop-Transcript | Out-Null } catch {}
+    }
+    exit 1
+}
+
 $bridge = Join-Path $PSScriptRoot "ApexSenseBridge.exe"
 $cliCandidates = @(
     (Join-Path $env:ProgramFiles "Nefarius Software Solutions\HidHide\x64\HidHideCLI.exe"),
@@ -31,16 +49,16 @@ $cliCandidates = @(
 $cli = $cliCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
     Select-Object -First 1
 if (-not (Test-Path -LiteralPath $bridge -PathType Leaf)) {
-    throw "找不到桥接程序：$bridge"
+    throw "Bridge executable not found: $bridge"
 }
 if ([string]::IsNullOrWhiteSpace($cli)) {
-    throw "找不到 HidHideCLI.exe。请先运行 Install-Drivers.cmd，然后重启 Windows。"
+    throw "HidHideCLI.exe was not found. Run Install-Drivers.cmd and restart Windows first."
 }
 
 function Invoke-HidHide([string[]]$Arguments) {
     $result = @(& $cli @Arguments)
     if ($LASTEXITCODE -ne 0) {
-        throw "HidHide 命令执行失败：$($Arguments -join ' ')"
+        throw "HidHide command failed: $($Arguments -join ' ')"
     }
     return $result
 }
@@ -74,7 +92,7 @@ try {
     )
     foreach ($app in $allowedApps) {
         if (-not (Test-Path -LiteralPath $app -PathType Leaf)) {
-            throw "找不到需要加入 HidHide 白名单的程序：$app"
+            throw "Required HidHide allowlisted application was not found: $app"
         }
         if ($originalApps -notcontains $app) {
             Invoke-HidHide @("--app-reg", $app) | Out-Null
@@ -89,7 +107,7 @@ try {
         $_.baseContainerDeviceInstancePath -match '^USB\\VID_045E&PID_028E\\FLYDIGI_'
     })
     if ($apexDevices.Count -eq 0) {
-        throw "没有找到 APEX 4 的 XInput 游戏接口。请确认手柄处于 XInput 模式。"
+        throw "No APEX 4 XInput game interface was found. Confirm that the controller is in XInput mode."
     }
     foreach ($device in $apexDevices) {
         $instance = [string]$device.deviceInstancePath
@@ -100,8 +118,8 @@ try {
     }
 
     Invoke-HidHide @("--cloak-on") | Out-Null
-    Write-Host "HidHide 已临时启用：游戏只能看到虚拟 DS5。"
-    Write-Host "桥接器和飞智空间站仍可访问 APEX 4。"
+    Write-Host "HidHide is active temporarily; the game can see only the virtual DualSense."
+    Write-Host "ApexSenseBridge and Flydigi Space Station retain access to APEX 4."
     Write-Host ""
     $bridgeArguments = @(
         "bridge-triggers", "--space-station", "--xinput-index", "0",
@@ -132,12 +150,15 @@ finally {
         } else {
             Invoke-HidHide @("--cloak-off") | Out-Null
         }
-        Write-Host "HidHide 已恢复到启动前状态。"
+        Write-Host "HidHide has been restored to its previous state."
     }
     catch {
-        Write-Warning "HidHide 自动恢复失败：$($_.Exception.Message)"
-        Write-Warning "请打开 HidHide Configuration Client，关闭 Enable device hiding。"
+        Write-Warning "Automatic HidHide restoration failed: $($_.Exception.Message)"
+        Write-Warning "Open HidHide Configuration Client and turn off Enable device hiding."
     }
 }
 
+if ($transcriptStarted) {
+    try { Stop-Transcript | Out-Null } catch {}
+}
 exit $bridgeExitCode

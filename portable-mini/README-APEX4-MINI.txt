@@ -68,6 +68,6 @@ APEX 4 XInput -> ApexSenseBridge -> 虚拟 DS5 -> 游戏
 4. 输入重复：检查启动窗口是否显示“HidHide 已临时启用”。桥接器和飞智
    空间站必须在白名单内，游戏则只能看到虚拟 DS5。
 5. 驱动安装日志位于本目录的 driver-install.log；USBip 安装器详细日志为
-   usbip-upstream.log。
+   usbip-upstream.log。启动和 HidHide 临时配置日志为 Start-APEX4-Mini.log。
 
 说明：APEX 4 空间站模式目前只转发自适应扳机，不转发握把震动或音频触觉。
