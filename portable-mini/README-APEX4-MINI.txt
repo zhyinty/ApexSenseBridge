@@ -35,11 +35,13 @@ ApexSenseBridge - APEX 4 Mini 便携版
 
 1. 打开飞智空间站，并保持它在后台运行。
 2. 确认 APEX 4 处于 XInput 模式。
-3. 双击 Start-APEX4-Mini.cmd，看到以下信息即表示桥接准备完成：
+3. 双击 Start-APEX4-Mini.cmd，并接受管理员权限提示。启动脚本会临时配置
+   HidHide：将桥接器和飞智空间站加入白名单，只对游戏隐藏实体 XInput。
+4. 看到以下信息即表示桥接准备完成：
    - `APEX verified: Apex 4 via Flydigi Space Station`
    - `Virtual DualSense firmware 0x0630 verified`
    - `Bridge running`
-4. 保持桥接窗口运行，然后启动游戏。
+5. 保持桥接窗口运行，然后启动游戏。此时游戏应只看到虚拟 DS5。
 
 工作链路：
 
@@ -50,8 +52,10 @@ APEX 4 XInput -> ApexSenseBridge -> 虚拟 DS5 -> 游戏
 --------------
 
 优先在桥接窗口按 Ctrl+C。也可以双击 Stop-APEX4-Mini.cmd 请求安全停止。
-程序退出时会将左右扳机恢复为普通模式。若程序被强制结束后阻尼未恢复，
-请在飞智空间站中把左右扳机手感设回“普通”。
+程序退出时会将左右扳机恢复为普通模式，并将 HidHide 的开关、反向模式、
+白名单和隐藏设备恢复到启动前状态。脚本只移除本次新增的规则，不会清空
+用户原有配置。若程序被强制结束后阻尼或隐藏状态未恢复，请在飞智空间站
+中将扳机设回“普通”，并在 HidHide Configuration Client 中关闭设备隐藏。
 
 五、常见问题
 ------------
@@ -61,8 +65,8 @@ APEX 4 XInput -> ApexSenseBridge -> 虚拟 DS5 -> 游戏
    在启动游戏之前已经显示 `Bridge running`。
 3. 有虚拟 DS5 但扳机无变化：确认飞智空间站正在运行，且本机 UDP 端口
    127.0.0.1:7878 未被安全软件拦截。
-4. 输入重复：游戏同时读取了实体 XInput 和虚拟 DS5。优先在游戏中只选择
-   DualSense 输入；当前空间站通道需要保留实体 XInput 给飞智空间站访问。
+4. 输入重复：检查启动窗口是否显示“HidHide 已临时启用”。桥接器和飞智
+   空间站必须在白名单内，游戏则只能看到虚拟 DS5。
 5. 驱动安装日志位于本目录的 driver-install.log；USBip 安装器详细日志为
    usbip-upstream.log。
 

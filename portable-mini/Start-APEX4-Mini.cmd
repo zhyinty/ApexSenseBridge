@@ -8,7 +8,7 @@ echo 请保持飞智空间站运行，并确认手柄处于 XInput 模式。
 echo 按 Ctrl+C 可安全停止并复位左右扳机。
 echo.
 
-"%~dp0ApexSenseBridge.exe" bridge-triggers --space-station --xinput-index 0 --virtual-backend integrated
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "%~dp0Start-APEX4-Mini.ps1"
 set "ASB_EXIT=%ERRORLEVEL%"
 if not "%ASB_EXIT%"=="0" (
   echo.

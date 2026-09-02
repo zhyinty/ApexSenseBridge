@@ -40,6 +40,13 @@ Start a manual APEX 4 bridge session with:
 
 `--space-station` does not require the APEX 4 DInput vendor HID interface and does not hide the physical XInput controller through HidHide. It currently routes adaptive triggers only; `--rumble` is rejected in this mode. Normal shutdown and error unwinding send Normal-mode commands to both triggers. Close the bridge cleanly with `Ctrl+C` or `ApexSenseBridge.exe stop-active-sessions`.
 
+The Mini package's `Start-APEX4-Mini.cmd` wraps this command with temporary
+HidHide configuration. It grants the bridge, Flydigi Space Station UI, and
+SpaceStationService access, hides the present Flydigi XInput game interface
+from the game, and restores the exact prior cloak/inverse/list state when the
+bridge exits. Direct command-line use of `--space-station` does not change
+HidHide by itself.
+
 ## Verified and tested games
 
 The bridge, triggers, and DSP haptics have been 100% verified in-game on:
@@ -89,6 +96,9 @@ Build the minimal APEX 4 package with:
 integrated `libVIIPER.dll` backend, start/stop helpers, Chinese setup guide,
 and verified offline usbip-win2 0.9.7.7 and HidHide 1.5.230 installers. It does
 not include Playnite, the tray/control applications, or the VIIPER sidecar.
+Its start helper temporarily hides the physical APEX 4 XInput interface so a
+game sees only the virtual DualSense, while keeping the bridge and Flydigi
+Space Station allowlisted. The previous HidHide state is restored on exit.
 
 ## Standalone Tray App (Outside Playnite)
 
