@@ -86,7 +86,7 @@ try {
     $gamingGroups = $gamingJson | ConvertFrom-Json
     $apexDevices = @($gamingGroups | ForEach-Object { $_.devices } | Where-Object {
         $_.present -eq $true -and $_.gamingDevice -eq $true -and
-        $_.baseContainerDeviceInstancePath -match '^USB\\VID_045E&PID_028E\\FLYDIGI_' 
+        $_.baseContainerDeviceInstancePath -match '^USB\\VID_045E&PID_028E\\FLYDIGI_'
     })
     if ($apexDevices.Count -eq 0) {
         throw "没有找到 APEX 4 的 XInput 游戏接口。请确认手柄处于 XInput 模式。"
