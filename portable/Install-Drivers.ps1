@@ -6,6 +6,8 @@ $usbipFilterService = "HKLM:\SYSTEM\CurrentControlSet\Services\usbip2_filter"
 $hidHideKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{01E0AB21-D1CC-42B4-9DFF-84FFE4F26DAF}"
 $hidHideService = "HKLM:\SYSTEM\CurrentControlSet\Services\HidHide"
 $logPath = Join-Path $PSScriptRoot "driver-install.log"
+$usbipExpectedHash = "51620FA5F9F8BE5932BC9D786DEEE557CE06D5407A99CAB490DCFAC71F185FEA"
+$hidHideExpectedHash = "F4BBBCB82E6258641B887C74BC81C4C5F66E4AA811808DFC304347687B7605F6"
 
 function Write-DriverLog([string]$Message) {
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
@@ -65,6 +67,22 @@ if (-not (Test-IsAdministrator)) {
 try {
     Write-DriverLog "Starting ApexSenseBridge portable driver setup."
 
+    $usbipInstaller = Join-Path $PSScriptRoot "Drivers\USBip-0.9.7.7-x64.exe"
+    $hidHideInstaller = Join-Path $PSScriptRoot "Drivers\HidHide_1.5.230_x64.exe"
+    foreach ($package in @(
+        @{ Name = "usbip-win2 0.9.7.7"; Path = $usbipInstaller; Hash = $usbipExpectedHash },
+        @{ Name = "HidHide 1.5.230"; Path = $hidHideInstaller; Hash = $hidHideExpectedHash }
+    )) {
+        if (-not (Test-Path -LiteralPath $package.Path -PathType Leaf)) {
+            throw "$($package.Name) installer is missing: $($package.Path)"
+        }
+        $actualHash = (Get-FileHash -LiteralPath $package.Path -Algorithm SHA256).Hash
+        if ($actualHash -ne $package.Hash) {
+            throw "$($package.Name) SHA-256 verification failed. Refusing to run it."
+        }
+    }
+    Write-DriverLog "Offline driver package SHA-256 verification passed."
+
     $usbip = Get-ItemProperty -LiteralPath $usbipKey -ErrorAction SilentlyContinue
     $usbipServicesReady = (Test-Path -LiteralPath $usbipUdeService) -and
                           (Test-Path -LiteralPath $usbipFilterService)
@@ -81,7 +99,6 @@ try {
         throw "Orphaned USBip driver services were found. Repair or remove USBip, restart, and run this helper again."
     }
     else {
-        $usbipInstaller = Join-Path $PSScriptRoot "Drivers\USBip-0.9.7.7-x64.exe"
         $usbipLog = Join-Path $PSScriptRoot "usbip-upstream.log"
         Invoke-BoundedInstaller $usbipInstaller @(
             "/VERYSILENT",
@@ -109,7 +126,6 @@ try {
         Write-DriverLog "An existing HidHide driver is present; preserving it."
     }
     else {
-        $hidHideInstaller = Join-Path $PSScriptRoot "Drivers\HidHide_1.5.230_x64.exe"
         Invoke-BoundedInstaller $hidHideInstaller @("/quiet", "/norestart") "HidHide 1.5.230"
         if (-not (Test-Path -LiteralPath $hidHideService)) {
             throw "HidHide setup returned without creating its driver service."

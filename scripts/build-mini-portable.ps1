@@ -21,6 +21,13 @@ $payload = @(
     @{ Source = (Join-Path $templateDir "Start-APEX4-Mini.cmd"); Name = "Start-APEX4-Mini.cmd" },
     @{ Source = (Join-Path $templateDir "Stop-APEX4-Mini.cmd"); Name = "Stop-APEX4-Mini.cmd" },
     @{ Source = (Join-Path $templateDir "README-APEX4-MINI.txt"); Name = "README-APEX4-MINI.txt" },
+    @{ Source = (Join-Path $projectRoot "portable\Install-Drivers.cmd"); Name = "Install-Drivers.cmd" },
+    @{ Source = (Join-Path $projectRoot "portable\Install-Drivers.ps1"); Name = "Install-Drivers.ps1" },
+    @{ Source = (Join-Path $projectRoot "installer\driver-manifest.json"); Name = "Drivers\driver-manifest.json" },
+    @{ Source = (Join-Path $projectRoot "third_party\prerequisites\USBip-0.9.7.7-x64.exe"); Name = "Drivers\USBip-0.9.7.7-x64.exe" },
+    @{ Source = (Join-Path $projectRoot "third_party\prerequisites\HidHide_1.5.230_x64.exe"); Name = "Drivers\HidHide_1.5.230_x64.exe" },
+    @{ Source = (Join-Path $projectRoot "third_party\prerequisites\USBIP-WIN2-LICENSE.txt"); Name = "Drivers\USBIP-WIN2-LICENSE.txt" },
+    @{ Source = (Join-Path $projectRoot "third_party\prerequisites\HIDHIDE-LICENSE.txt"); Name = "Drivers\HIDHIDE-LICENSE.txt" },
     @{ Source = (Join-Path $projectRoot "LICENSE"); Name = "LICENSE.txt" },
     @{ Source = (Join-Path $releaseDir "VIIPER-LICENSE.txt"); Name = "VIIPER-LICENSE.txt" },
     @{ Source = (Join-Path $releaseDir "VIIPER-SOURCE.txt"); Name = "VIIPER-SOURCE.txt" },
@@ -40,7 +47,12 @@ New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
 New-Item -ItemType Directory -Path (Split-Path -Parent $OutputPath) -Force | Out-Null
 
 foreach ($item in $payload) {
-    Copy-Item -LiteralPath $item.Source -Destination (Join-Path $stageDir $item.Name)
+    $destination = Join-Path $stageDir $item.Name
+    $destinationDirectory = Split-Path -Parent $destination
+    if (-not (Test-Path -LiteralPath $destinationDirectory)) {
+        New-Item -ItemType Directory -Path $destinationDirectory -Force | Out-Null
+    }
+    Copy-Item -LiteralPath $item.Source -Destination $destination
 }
 
 if (Test-Path -LiteralPath $OutputPath) {

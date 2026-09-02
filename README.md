@@ -79,17 +79,16 @@ The lightweight `ApexSenseBridgeControl.exe` panel can test APEX detection, rest
 
 ### APEX 4 Mini portable ZIP
 
-For a machine that already has Flydigi Space Station and usbip-win2 installed,
-build the minimal APEX 4 package with:
+Build the minimal APEX 4 package with:
 
 ```powershell
 .\scripts\build-mini-portable.ps1
 ```
 
-`ApexSenseBridge-APEX4-Mini-Portable.zip` contains only the bridge executable,
-integrated `libVIIPER.dll` backend, start/stop helpers, and required notices. It
-does not include Playnite, the tray/control applications, HidHide, driver
-installers, or the VIIPER sidecar.
+`ApexSenseBridge-APEX4-Mini-Portable.zip` contains the bridge executable,
+integrated `libVIIPER.dll` backend, start/stop helpers, Chinese setup guide,
+and verified offline usbip-win2 0.9.7.7 and HidHide 1.5.230 installers. It does
+not include Playnite, the tray/control applications, or the VIIPER sidecar.
 
 ## Standalone Tray App (Outside Playnite)
 

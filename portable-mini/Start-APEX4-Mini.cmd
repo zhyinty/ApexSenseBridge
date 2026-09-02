@@ -1,17 +1,18 @@
 @echo off
 setlocal
+chcp 65001 >nul
 cd /d "%~dp0"
 
-echo ApexSenseBridge APEX 4 Mini
-echo Keep Flydigi Space Station running and the controller in XInput mode.
-echo Press Ctrl+C to stop and reset both triggers.
+echo ApexSenseBridge APEX 4 Mini 便携版
+echo 请保持飞智空间站运行，并确认手柄处于 XInput 模式。
+echo 按 Ctrl+C 可安全停止并复位左右扳机。
 echo.
 
 "%~dp0ApexSenseBridge.exe" bridge-triggers --space-station --xinput-index 0 --virtual-backend integrated
 set "ASB_EXIT=%ERRORLEVEL%"
 if not "%ASB_EXIT%"=="0" (
   echo.
-  echo Bridge exited with error code %ASB_EXIT%.
+  echo 桥接器异常退出，错误代码：%ASB_EXIT%。
   pause
 )
 exit /b %ASB_EXIT%
