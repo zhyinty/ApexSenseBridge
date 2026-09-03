@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Security.Principal;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
@@ -15,6 +16,8 @@ namespace Apex4MiniGui
 {
     internal static class Program
     {
+        private static Mutex singleInstance;
+
         [STAThread]
         private static void Main(string[] args)
         {
@@ -31,6 +34,13 @@ namespace Apex4MiniGui
                     });
                 }
                 catch { }
+                return;
+            }
+            bool created;
+            singleInstance = new Mutex(true, @"Global\ApexSenseBridge.APEX4Mini", out created);
+            if (!created)
+            {
+                MessageBox.Show("APEX4-Mini 已经在运行，请查看任务栏托盘。", "APEX4 DualSense Bridge");
                 return;
             }
             Application.EnableVisualStyles();
@@ -174,16 +184,18 @@ namespace Apex4MiniGui
                     WorkingDirectory = root, UseShellExecute = false, CreateNoWindow = true,
                     RedirectStandardOutput = true, RedirectStandardError = true } };
                 process.EnableRaisingEvents = true;
-                process.OutputDataReceived += delegate(object s, DataReceivedEventArgs e) { if (e.Data != null && e.Data.Contains("Bridge running")) SafeUi(delegate { SetState(true, "●  运行中：Xbox 360 已隐藏"); }); };
+                process.OutputDataReceived += delegate(object s, DataReceivedEventArgs e) { if (e.Data != null) AppendLog(e.Data); };
                 process.ErrorDataReceived += delegate(object s, DataReceivedEventArgs e) { if (e.Data != null) AppendLog(e.Data); };
                 process.Exited += async delegate { await OnBridgeExitedAsync(process); };
                 lock (stateLock) { bridge = process; }
                 if (!process.Start()) throw new InvalidOperationException("无法启动 Bridge。");
                 process.BeginOutputReadLine(); process.BeginErrorReadLine();
+                SetState(true, "●  运行中：Xbox 360 已隐藏");
             }
             catch (Exception ex)
             {
                 lock (stateLock) { bridge = null; }
+                AppendLog("Start failed: " + ex);
                 RestoreHidHideAsync().Wait();
                 SetState(false, "●  启动失败，HidHide 已还原");
                 MessageBox.Show(ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
