@@ -1081,8 +1081,13 @@ int commandBridgeTriggers(int argc, char** argv) {
     auto rumbleBridge = options.routeRumble
         ? (options.spaceStation
             ? std::make_unique<asb::dualsense::RumbleBridge>(
-                  [&rumbleXInput](std::uint8_t low, std::uint8_t high, std::string& outputError) {
-                      return rumbleXInput->setRumble(low, high, outputError);
+                  [&rumbleXInput, scale = options.rumbleStrengthPercent]
+                  (std::uint8_t low, std::uint8_t high, std::string& outputError) {
+                      const auto scaleByte = [scale](std::uint8_t value) {
+                          return static_cast<std::uint8_t>((std::min)(255U,
+                              (static_cast<unsigned int>(value) * scale + 50U) / 100U));
+                      };
+                      return rumbleXInput->setRumble(scaleByte(low), scaleByte(high), outputError);
                   }, hapticConfig)
             : std::make_unique<asb::dualsense::RumbleBridge>(*device, hapticConfig))
         : std::unique_ptr<asb::dualsense::RumbleBridge>{};
@@ -1092,22 +1097,9 @@ int commandBridgeTriggers(int argc, char** argv) {
     auto virtualDualSense = asb::dualsense::createVirtualDualSense(std::move(backendOptions));
     if (!virtualDualSense->open(
             error,
-            [&bridge, rumble = rumbleBridge.get(), scale = options.rumbleStrengthPercent](const auto& feedback) {
+            [&bridge, rumble = rumbleBridge.get()](const auto& feedback) {
                 bridge.handle(feedback);
-                if (rumble) {
-                    auto adjusted = feedback;
-                    const auto scaleByte = [scale](std::uint8_t value) {
-                        return static_cast<std::uint8_t>((std::min)(255U,
-                            (static_cast<unsigned int>(value) * scale + 50U) / 100U));
-                    };
-                    adjusted.rumbleLeft = scaleByte(adjusted.rumbleLeft);
-                    adjusted.rumbleRight = scaleByte(adjusted.rumbleRight);
-                    adjusted.leftEnergy = static_cast<std::uint16_t>((std::min)(65535U,
-                        (static_cast<unsigned int>(adjusted.leftEnergy) * scale + 50U) / 100U));
-                    adjusted.rightEnergy = static_cast<std::uint16_t>((std::min)(65535U,
-                        (static_cast<unsigned int>(adjusted.rightEnergy) * scale + 50U) / 100U));
-                    rumble->handle(adjusted);
-                }
+                if (rumble) rumble->handle(feedback);
             })) {
         std::cerr << "Virtual DualSense creation failed: " << error << '\n';
         return failSession(6, "Virtual DualSense creation failed: " + error);
