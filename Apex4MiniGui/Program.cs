@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -9,7 +8,6 @@ using System.Security.Principal;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
 namespace Apex4MiniGui
@@ -324,26 +322,18 @@ namespace Apex4MiniGui
         private IEnumerable<string> FindApexDevices()
         {
             var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var parsed = new JavaScriptSerializer().DeserializeObject(Run("--dev-gaming")) as object[];
-            if (parsed == null) return result;
-            foreach (var groupObject in parsed)
+            var raw = Run("--dev-gaming");
+            var pattern = @"\{\s*""present""\s*:\s*true\s*,.*?""deviceInstancePath""\s*:\s*""([^""]+)""\s*,.*?""baseContainerDeviceInstancePath""\s*:\s*""([^""]+)""";
+            foreach (Match match in Regex.Matches(raw, pattern, RegexOptions.Singleline | RegexOptions.IgnoreCase))
             {
-                var group = groupObject as Dictionary<string, object>;
-                object devicesObject;
-                if (group == null || !group.TryGetValue("devices", out devicesObject)) continue;
-                var devices = devicesObject as object[];
-                if (devices == null) continue;
-                foreach (var deviceObject in devices)
-                {
-                    var device = deviceObject as Dictionary<string, object>;
-                    if (device == null) continue;
-                    var present = device.ContainsKey("present") && Convert.ToBoolean(device["present"]);
-                    var basePath = device.ContainsKey("baseContainerDeviceInstancePath") ? Convert.ToString(device["baseContainerDeviceInstancePath"]) : "";
-                    if (!present || basePath.IndexOf("USB\\VID_045E&PID_028E\\FLYDIGI_", StringComparison.OrdinalIgnoreCase) != 0) continue;
-                    if (device.ContainsKey("deviceInstancePath")) result.Add(Convert.ToString(device["deviceInstancePath"]));
-                    result.Add(basePath);
-                }
+                var instance = match.Groups[1].Value.Replace("\\\\", "\\");
+                var basePath = match.Groups[2].Value.Replace("\\\\", "\\");
+                if (basePath.IndexOf("USB\\VID_045E&PID_028E\\FLYDIGI_", StringComparison.OrdinalIgnoreCase) != 0) continue;
+                result.Add(instance);
+                result.Add(basePath);
             }
+            if (result.Count == 0 && raw.IndexOf("VID_04B4&PID_2412", StringComparison.OrdinalIgnoreCase) >= 0)
+                throw new InvalidOperationException("手柄当前处于 DInput 模式（VID_04B4&PID_2412）。请切换到 XInput 模式后重试。");
             return result;
         }
 
