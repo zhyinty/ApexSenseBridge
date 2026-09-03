@@ -12,8 +12,8 @@ int main() {
 
     dualsense::DualSenseInputState state{};
     platform::mapXInputButtons(platform::xinputButton::kBack, 0, 0, state);
-    assert(state.buttons == dualsense::button::kTouchpadClick);
-    assert((state.buttons & dualsense::button::kCreate) == 0);
+    assert(state.buttons == dualsense::button::kCreate);
+    assert((state.buttons & dualsense::button::kTouchpadClick) == 0);
 
     platform::mapXInputButtons(platform::xinputButton::kStart, 0, 0, state);
     assert(state.buttons == dualsense::button::kOptions);
@@ -95,7 +95,7 @@ int main() {
     const auto allControls = platform::mapXInputState(simultaneous);
     assert(allControls.dpad == 0x0F);
     assert(allControls.buttons ==
-           (dualsense::button::kTouchpadClick | dualsense::button::kOptions |
+           (dualsense::button::kCreate | dualsense::button::kOptions |
             dualsense::button::kSquare | dualsense::button::kCross |
             dualsense::button::kCircle | dualsense::button::kTriangle |
             dualsense::button::kL1 | dualsense::button::kR1 |

@@ -34,9 +34,9 @@ void mapXInputButtons(std::uint16_t raw,
     if (leftTrigger > kTriggerThreshold) state.buttons |= kL2;
     if (rightTrigger > kTriggerThreshold) state.buttons |= kR2;
 
-    // XInput has no touchpad. View/Back is the only practical source for the
-    // DualSense touchpad click used as Map in Spider-Man and many native games.
-    if (raw & kBack) state.buttons |= kTouchpadClick;
+    // Xbox View/Back/Select is the semantic equivalent of DualSense Create.
+    // Touchpad click is a distinct control and must not be synthesized here.
+    if (raw & kBack) state.buttons |= kCreate;
     if (raw & kStart) state.buttons |= kOptions;
     if (raw & kLeftThumb) state.buttons |= kL3;
     if (raw & kRightThumb) state.buttons |= kR3;
