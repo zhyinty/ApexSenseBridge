@@ -1,5 +1,7 @@
 param(
-    [int]$Seconds = 0
+    [int]$Seconds = 0,
+    [ValidateRange(0, 200)][int]$TriggerStrength = 100,
+    [ValidateRange(0, 200)][int]$RumbleStrength = 100
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,11 +15,14 @@ function Test-IsAdministrator {
 if (-not (Test-IsAdministrator)) {
     $powerShell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
     $elevationArguments = @(
-        "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`""
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
+        "-File", "`"$PSCommandPath`""
     )
     if ($Seconds -gt 0) {
         $elevationArguments += @("-Seconds", [string]$Seconds)
     }
+    $elevationArguments += @("-TriggerStrength", [string]$TriggerStrength)
+    $elevationArguments += @("-RumbleStrength", [string]$RumbleStrength)
     $elevated = Start-Process -FilePath $powerShell -ArgumentList $elevationArguments `
         -Verb RunAs -Wait -PassThru
     exit $elevated.ExitCode
@@ -123,7 +128,9 @@ try {
     Write-Host ""
     $bridgeArguments = @(
         "bridge-triggers", "--space-station", "--xinput-index", "0",
-        "--virtual-backend", "integrated"
+        "--virtual-backend", "integrated",
+        "--trigger-strength", [string]$TriggerStrength,
+        "--rumble-strength", [string]$RumbleStrength
     )
     if ($Seconds -gt 0) {
         $bridgeArguments += @("--seconds", [string]$Seconds)

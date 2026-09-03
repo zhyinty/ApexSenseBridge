@@ -338,6 +338,7 @@ void printUsage() {
         << "                  [--proxy-xinput] [--xinput-index 0..3]\n"
         << "                  [--rumble]\n"
         << "                  [--haptic-threshold 0..95]\n"
+        << "                  [--trigger-strength 0..200] [--rumble-strength 0..200]\n"
         << "                  [--verify-virtual-input]\n"
         << "                  [--virtual-backend auto|integrated|sidecar]\n"
         << "                  [--touchpad-profile NAME]\n"
@@ -794,6 +795,8 @@ struct BridgeCommandOptions {
         asb::dualsense::TouchpadGestureProfile::None;
     bool touchpadProfileExplicit = false;
     unsigned int hapticThresholdPercent = 12;
+    unsigned int triggerStrengthPercent = 100;
+    unsigned int rumbleStrengthPercent = 100;
     bool hapticThresholdExplicit = false;
     std::optional<unsigned int> xinputIndex;
     std::optional<std::string> sessionToken;
@@ -847,6 +850,23 @@ bool parseBridgeOptions(int argc, char** argv, BridgeCommandOptions& options,
                 options.hapticThresholdExplicit = true;
             } catch (...) {
                 error = "--haptic-threshold requires an integer percentage from 0 to 95.";
+                return false;
+            }
+        } else if (value == "--trigger-strength" || value == "--rumble-strength") {
+            const bool trigger = value == "--trigger-strength";
+            if (++i >= argc) {
+                error = std::string(trigger ? "--trigger-strength" : "--rumble-strength") +
+                        " requires an integer percentage from 0 to 200.";
+                return false;
+            }
+            try {
+                const auto parsed = std::stoul(argv[i]);
+                if (parsed > 200) throw std::out_of_range("strength");
+                (trigger ? options.triggerStrengthPercent : options.rumbleStrengthPercent) =
+                    static_cast<unsigned int>(parsed);
+            } catch (...) {
+                error = std::string(trigger ? "--trigger-strength" : "--rumble-strength") +
+                        " requires an integer percentage from 0 to 200.";
                 return false;
             }
         } else if (value == "--verify-virtual-input") {
@@ -921,7 +941,7 @@ int commandBridgeTriggers(int argc, char** argv) {
     BridgeCommandOptions options{};
     std::string error;
     if (!parseBridgeOptions(argc, argv, options, error)) {
-        std::cerr << error << "\nUsage: ApexSenseBridge bridge-triggers [index] [--seconds N] [--viiper PATH] [--virtual-backend auto|integrated|sidecar] [--telemetry-json PATH] [--proxy-xinput] [--xinput-index 0..3] [--rumble] [--haptic-threshold 0..95] [--verify-virtual-input] [--touchpad-profile NAME] [--view-hold-swipe-up] [--isolate-apex] [--space-station] [--session-token 32HEX]\n";
+        std::cerr << error << "\nUsage: ApexSenseBridge bridge-triggers [index] [--seconds N] [--viiper PATH] [--virtual-backend auto|integrated|sidecar] [--telemetry-json PATH] [--proxy-xinput] [--xinput-index 0..3] [--rumble] [--haptic-threshold 0..95] [--trigger-strength 0..200] [--rumble-strength 0..200] [--verify-virtual-input] [--touchpad-profile NAME] [--view-hold-swipe-up] [--isolate-apex] [--space-station] [--session-token 32HEX]\n";
         return 1;
     }
 
@@ -1026,8 +1046,20 @@ int commandBridgeTriggers(int argc, char** argv) {
     asb::dualsense::AdaptiveTriggerBridge bridge(
         options.spaceStation
             ? asb::dualsense::AdaptiveTriggerBridge::Output(
-                  [&spaceStation](const auto& command, std::string& outputError) {
-                      return spaceStation.send(command, outputError);
+                  [&spaceStation, scale = options.triggerStrengthPercent]
+                  (const auto& command, std::string& outputError) {
+                      auto adjusted = command;
+                      const auto scaleByte = [scale](std::uint8_t value) {
+                          return static_cast<std::uint8_t>((std::min)(255U,
+                              (static_cast<unsigned int>(value) * scale + 50U) / 100U));
+                      };
+                      if (adjusted.mode == asb::TriggerMode::Race) adjusted.params[1] = scaleByte(adjusted.params[1]);
+                      else if (adjusted.mode == asb::TriggerMode::RecoilRattle) adjusted.params[2] = scaleByte(adjusted.params[2]);
+                      else if (adjusted.mode == asb::TriggerMode::SniperBreak) {
+                          adjusted.params[1] = scaleByte(adjusted.params[1]);
+                          adjusted.params[2] = scaleByte(adjusted.params[2]);
+                      }
+                      return spaceStation.send(adjusted, outputError);
                   })
             : asb::dualsense::AdaptiveTriggerBridge::Output(
                   [&device](const auto& command, std::string& outputError) {
@@ -1060,9 +1092,22 @@ int commandBridgeTriggers(int argc, char** argv) {
     auto virtualDualSense = asb::dualsense::createVirtualDualSense(std::move(backendOptions));
     if (!virtualDualSense->open(
             error,
-            [&bridge, rumble = rumbleBridge.get()](const auto& feedback) {
+            [&bridge, rumble = rumbleBridge.get(), scale = options.rumbleStrengthPercent](const auto& feedback) {
                 bridge.handle(feedback);
-                if (rumble) rumble->handle(feedback);
+                if (rumble) {
+                    auto adjusted = feedback;
+                    const auto scaleByte = [scale](std::uint8_t value) {
+                        return static_cast<std::uint8_t>((std::min)(255U,
+                            (static_cast<unsigned int>(value) * scale + 50U) / 100U));
+                    };
+                    adjusted.rumbleLeft = scaleByte(adjusted.rumbleLeft);
+                    adjusted.rumbleRight = scaleByte(adjusted.rumbleRight);
+                    adjusted.leftEnergy = static_cast<std::uint16_t>((std::min)(65535U,
+                        (static_cast<unsigned int>(adjusted.leftEnergy) * scale + 50U) / 100U));
+                    adjusted.rightEnergy = static_cast<std::uint16_t>((std::min)(65535U,
+                        (static_cast<unsigned int>(adjusted.rightEnergy) * scale + 50U) / 100U));
+                    rumble->handle(adjusted);
+                }
             })) {
         std::cerr << "Virtual DualSense creation failed: " << error << '\n';
         return failSession(6, "Virtual DualSense creation failed: " + error);

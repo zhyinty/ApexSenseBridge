@@ -20,6 +20,8 @@ $payload = @(
     @{ Source = (Join-Path $releaseDir "libVIIPER.dll"); Name = "libVIIPER.dll" },
     @{ Source = (Join-Path $templateDir "Start-APEX4-Mini.cmd"); Name = "Start-APEX4-Mini.cmd" },
     @{ Source = (Join-Path $templateDir "Start-APEX4-Mini.ps1"); Name = "Start-APEX4-Mini.ps1" },
+    @{ Source = (Join-Path $templateDir "Start-APEX4-GUI.cmd"); Name = "Start-APEX4-GUI.cmd" },
+    @{ Source = (Join-Path $templateDir "Start-APEX4-GUI.ps1"); Name = "Start-APEX4-GUI.ps1" },
     @{ Source = (Join-Path $templateDir "Stop-APEX4-Mini.cmd"); Name = "Stop-APEX4-Mini.cmd" },
     @{ Source = (Join-Path $templateDir "README-APEX4-MINI.txt"); Name = "README-APEX4-MINI.txt" },
     @{ Source = (Join-Path $projectRoot "portable\Install-Drivers.cmd"); Name = "Install-Drivers.cmd" },

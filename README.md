@@ -94,12 +94,15 @@ Build the minimal APEX 4 package with:
 ```
 
 `ApexSenseBridge-APEX4-Mini-Portable.zip` contains the bridge executable,
-integrated `libVIIPER.dll` backend, start/stop helpers, Chinese setup guide,
+integrated `libVIIPER.dll` backend, graphical tray UI, start/stop helpers, Chinese setup guide,
 and verified offline usbip-win2 0.9.7.7 and HidHide 1.5.230 installers. It does
-not include Playnite, the tray/control applications, or the VIIPER sidecar.
+not include Playnite, the full automatic-detection tray application, or the VIIPER sidecar.
 Its start helper temporarily hides the physical APEX 4 XInput interface so a
 game sees only the virtual DualSense, while keeping the bridge and Flydigi
-Space Station allowlisted. The previous HidHide state is restored on exit.
+Space Station allowlisted. The previous HidHide state is restored on stop or
+tray exit. `Start-APEX4-GUI.cmd` exposes start/stop controls plus independent
+0–200% adaptive-trigger and vibration strength settings; close and minimize
+both keep the controller running in the Windows notification area.
 
 ## Standalone Tray App (Outside Playnite)
 
