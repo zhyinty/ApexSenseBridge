@@ -8,6 +8,17 @@ $releaseDir = Join-Path $projectRoot "build-win\Release"
 $templateDir = Join-Path $projectRoot "portable-mini"
 $distDir = Join-Path $projectRoot "dist"
 $stageDir = Join-Path $projectRoot "build-mini-portable"
+$guiProject = Join-Path $projectRoot "Apex4MiniGui\Apex4MiniGui.csproj"
+$guiExe = Join-Path $projectRoot "Apex4MiniGui\bin\Release\APEX4-Mini.exe"
+
+$msbuild = Join-Path $env:SystemRoot "Microsoft.NET\Framework64\v4.0.30319\MSBuild.exe"
+if (-not (Test-Path -LiteralPath $msbuild)) {
+    throw "MSBuild.exe was not found: $msbuild"
+}
+& $msbuild $guiProject /t:Rebuild /p:Configuration=Release /p:Platform=AnyCPU
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $guiExe)) {
+    throw "APEX4-Mini.exe compilation failed."
+}
 
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
     $OutputPath = Join-Path $distDir "ApexSenseBridge-APEX4-Mini-Portable.zip"
@@ -18,11 +29,7 @@ if ([string]::IsNullOrWhiteSpace($OutputPath)) {
 $payload = @(
     @{ Source = (Join-Path $releaseDir "ApexSenseBridge.exe"); Name = "ApexSenseBridge.exe" },
     @{ Source = (Join-Path $releaseDir "libVIIPER.dll"); Name = "libVIIPER.dll" },
-    @{ Source = (Join-Path $templateDir "Start-APEX4-Mini.cmd"); Name = "Start-APEX4-Mini.cmd" },
-    @{ Source = (Join-Path $templateDir "Start-APEX4-Mini.ps1"); Name = "Start-APEX4-Mini.ps1" },
-    @{ Source = (Join-Path $templateDir "Start-APEX4-GUI.cmd"); Name = "Start-APEX4-GUI.cmd" },
-    @{ Source = (Join-Path $templateDir "Start-APEX4-GUI.ps1"); Name = "Start-APEX4-GUI.ps1" },
-    @{ Source = (Join-Path $templateDir "Stop-APEX4-Mini.cmd"); Name = "Stop-APEX4-Mini.cmd" },
+    @{ Source = $guiExe; Name = "APEX4-Mini.exe" },
     @{ Source = (Join-Path $templateDir "README-APEX4-MINI.txt"); Name = "README-APEX4-MINI.txt" },
     @{ Source = (Join-Path $projectRoot "portable\Install-Drivers.cmd"); Name = "Install-Drivers.cmd" },
     @{ Source = (Join-Path $projectRoot "portable\Install-Drivers.ps1"); Name = "Install-Drivers.ps1" },

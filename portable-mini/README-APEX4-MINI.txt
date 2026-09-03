@@ -33,13 +33,13 @@ ApexSenseBridge - APEX 4 Mini 便携版
 三、每次使用
 ------------
 
-推荐方式：双击 Start-APEX4-GUI.cmd 打开图形界面。界面可以启动/停止桥接，
+双击 APEX4-Mini.exe 打开图形界面。界面可以启动/停止桥接，
 设置自适应扳机和振动强度（0%～200%）。关闭窗口或最小化会进入系统托盘；
 托盘右键“退出”会先停止桥接并还原 HidHide，然后退出程序。
 
 1. 打开飞智空间站，并保持它在后台运行。
 2. 确认 APEX 4 处于 XInput 模式。
-3. 双击 Start-APEX4-Mini.cmd，并接受管理员权限提示。启动脚本会临时配置
+3. 双击 APEX4-Mini.exe，并接受管理员权限提示。点击“启动”后程序会临时配置
    HidHide：将桥接器和飞智空间站加入白名单，只对游戏隐藏实体 XInput。
 4. 看到以下信息即表示桥接准备完成：
    - `APEX verified: Apex 4 via Flydigi Space Station`
@@ -56,7 +56,7 @@ APEX 4 XInput -> ApexSenseBridge -> 虚拟 DS5 -> 游戏
 四、停止与复位
 --------------
 
-优先在桥接窗口按 Ctrl+C。也可以双击 Stop-APEX4-Mini.cmd 请求安全停止。
+在图形界面点击“停止”，或在托盘菜单选择“停止并还原 HidHide”。
 程序退出时会将左右扳机恢复为普通模式，并将 HidHide 的开关、反向模式、
 白名单和隐藏设备恢复到启动前状态。脚本只移除本次新增的规则，不会清空
 用户原有配置。若程序被强制结束后阻尼或隐藏状态未恢复，请在飞智空间站
@@ -73,7 +73,7 @@ APEX 4 XInput -> ApexSenseBridge -> 虚拟 DS5 -> 游戏
 4. 输入重复：检查启动窗口是否显示“HidHide 已临时启用”。桥接器和飞智
    空间站必须在白名单内，游戏则只能看到虚拟 DS5。
 5. 驱动安装日志位于本目录的 driver-install.log；USBip 安装器详细日志为
-   usbip-upstream.log。启动和 HidHide 临时配置日志为 Start-APEX4-Mini.log。
+   usbip-upstream.log。运行日志为 APEX4-Mini.log。
 
 说明：APEX 4 空间站模式会自动把普通振动和处理后的音频触觉转发到实体
 手柄马达；退出时会自动停止两个马达。
