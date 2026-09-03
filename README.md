@@ -30,6 +30,7 @@ The APEX 4 path keeps the virtual DualSense device. Input and feedback flow as f
 APEX 4 XInput -> ApexSenseBridge -> virtual DualSense -> game
 game native DualSense trigger output -> ApexSenseBridge -> 127.0.0.1:7878
                                                    -> Flydigi Space Station -> APEX 4
+game DualSense rumble/audio haptics -> ApexSenseBridge -> XInputSetState -> APEX 4 motors
 ```
 
 Start a manual APEX 4 bridge session with:
@@ -38,7 +39,7 @@ Start a manual APEX 4 bridge session with:
 .\ApexSenseBridge.exe bridge-triggers --space-station --xinput-index 0
 ```
 
-`--space-station` does not require the APEX 4 DInput vendor HID interface and does not hide the physical XInput controller through HidHide. It currently routes adaptive triggers only; `--rumble` is rejected in this mode. Normal shutdown and error unwinding send Normal-mode commands to both triggers. Close the bridge cleanly with `Ctrl+C` or `ApexSenseBridge.exe stop-active-sessions`.
+`--space-station` does not require the APEX 4 DInput vendor HID interface. It enables physical XInput rumble automatically: standard DualSense rumble and processed audio haptics are sent to the APEX 4 motors with `XInputSetState`, while adaptive triggers continue through Flydigi Space Station. Normal shutdown and error unwinding stop both motors and send Normal-mode commands to both triggers. Close the bridge cleanly with `Ctrl+C` or `ApexSenseBridge.exe stop-active-sessions`.
 
 The Mini package's `Start-APEX4-Mini.cmd` wraps this command with temporary
 HidHide configuration. It grants the bridge, Flydigi Space Station UI, and

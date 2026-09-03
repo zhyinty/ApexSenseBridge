@@ -18,7 +18,13 @@ unsigned difference(std::uint8_t left, std::uint8_t right) noexcept {
 
 RumbleBridge::RumbleBridge(flydigi::Apex5Device& device,
                            haptics::HapticConfig hapticConfig)
-    : device_(device), hapticProcessor_(hapticConfig) {}
+    : RumbleBridge(
+          [&device](std::uint8_t low, std::uint8_t high, std::string& error) {
+              return device.setRumble(low, high, error);
+          }, hapticConfig) {}
+
+RumbleBridge::RumbleBridge(Output output, haptics::HapticConfig hapticConfig)
+    : output_(std::move(output)), hapticProcessor_(hapticConfig) {}
 
 void RumbleBridge::handle(const DualSenseFeedback& feedback) {
     if (failed_.load(std::memory_order_relaxed)) {
@@ -125,7 +131,7 @@ void RumbleBridge::writeDesiredLocked(RumbleLevels desired,
     }
 
     std::string writeError;
-    if (!device_.setRumble(desired.lowFrequency, desired.highFrequency, writeError)) {
+    if (!output_(desired.lowFrequency, desired.highFrequency, writeError)) {
         writeFailures_.fetch_add(1, std::memory_order_relaxed);
         {
             std::lock_guard lock(errorMutex_);

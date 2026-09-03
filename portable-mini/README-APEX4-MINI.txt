@@ -47,6 +47,7 @@ ApexSenseBridge - APEX 4 Mini 便携版
 
 APEX 4 XInput -> ApexSenseBridge -> 虚拟 DS5 -> 游戏
 游戏原生 DS5 扳机反馈 -> ApexSenseBridge -> 飞智空间站 -> APEX 4
+游戏 DS5 普通振动/音频触觉 -> ApexSenseBridge -> XInput -> APEX 4 马达
 
 四、停止与复位
 --------------
@@ -70,4 +71,5 @@ APEX 4 XInput -> ApexSenseBridge -> 虚拟 DS5 -> 游戏
 5. 驱动安装日志位于本目录的 driver-install.log；USBip 安装器详细日志为
    usbip-upstream.log。启动和 HidHide 临时配置日志为 Start-APEX4-Mini.log。
 
-说明：APEX 4 空间站模式目前只转发自适应扳机，不转发握把震动或音频触觉。
+说明：APEX 4 空间站模式会自动把普通振动和处理后的音频触觉转发到实体
+手柄马达；退出时会自动停止两个马达。

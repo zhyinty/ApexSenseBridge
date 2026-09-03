@@ -7,6 +7,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -42,7 +43,11 @@ struct RumbleBridgeStats {
 
 class RumbleBridge {
 public:
+    using Output = std::function<bool(std::uint8_t, std::uint8_t, std::string&)>;
+
     explicit RumbleBridge(flydigi::Apex5Device& device,
+                          haptics::HapticConfig hapticConfig = {});
+    explicit RumbleBridge(Output output,
                           haptics::HapticConfig hapticConfig = {});
 
     void handle(const DualSenseFeedback& feedback);
@@ -59,7 +64,7 @@ private:
                             bool force,
                             bool audioOrigin);
 
-    flydigi::Apex5Device& device_;
+    Output output_;
     haptics::HapticProcessor hapticProcessor_;
     RumbleLevels standard_{};
     RumbleLevels audio_{};

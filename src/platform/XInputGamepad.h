@@ -14,6 +14,9 @@ class XInputGamepad {
 public:
     virtual ~XInputGamepad() = default;
     virtual bool poll(dualsense::DualSenseInputState& state, std::string& error) = 0;
+    virtual bool setRumble(std::uint8_t lowFrequencyMotor,
+                           std::uint8_t highFrequencyMotor,
+                           std::string& error) = 0;
     [[nodiscard]] virtual unsigned int index() const noexcept = 0;
 };
 

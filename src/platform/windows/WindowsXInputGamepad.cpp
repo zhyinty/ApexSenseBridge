@@ -35,6 +35,21 @@ public:
         return true;
     }
 
+    bool setRumble(std::uint8_t lowFrequencyMotor,
+                   std::uint8_t highFrequencyMotor,
+                   std::string& error) override {
+        XINPUT_VIBRATION vibration{};
+        vibration.wLeftMotorSpeed = static_cast<WORD>(lowFrequencyMotor) * 257U;
+        vibration.wRightMotorSpeed = static_cast<WORD>(highFrequencyMotor) * 257U;
+        const auto status = XInputSetState(index_, &vibration);
+        if (status != ERROR_SUCCESS) {
+            error = "XInput rumble output failed for controller " + std::to_string(index_) +
+                    " (status " + std::to_string(status) + ")";
+            return false;
+        }
+        return true;
+    }
+
     unsigned int index() const noexcept override { return index_; }
 
 private:

@@ -876,6 +876,7 @@ bool parseBridgeOptions(int argc, char** argv, BridgeCommandOptions& options,
         } else if (value == "--space-station") {
             options.spaceStation = true;
             options.proxyXInput = true;
+            options.routeRumble = true;
         } else if (value == "--xinput-index") {
             if (++i >= argc) { error = "--xinput-index requires a value from 0 to 3."; return false; }
             try {
@@ -974,10 +975,7 @@ int commandBridgeTriggers(int argc, char** argv) {
     }
 
     std::unique_ptr<asb::RumbleResetGuard> rumbleResetOnExit;
-    if (options.spaceStation && options.routeRumble) {
-        return failSession(12, "--rumble is not supported by the Space Station trigger transport.");
-    }
-    if (options.routeRumble) {
+    if (options.routeRumble && !options.spaceStation) {
         if (!device->stopRumble(error)) {
             std::cerr << "Could not establish a stopped grip-rumble baseline: "
                       << error << '\n';
@@ -1038,8 +1036,23 @@ int commandBridgeTriggers(int argc, char** argv) {
     asb::haptics::HapticConfig hapticConfig{};
     hapticConfig.activationThreshold =
         static_cast<double>(options.hapticThresholdPercent) / 100.0;
+    std::unique_ptr<asb::platform::XInputGamepad> rumbleXInput;
+    if (options.spaceStation && options.routeRumble) {
+        rumbleXInput = asb::platform::openXInputGamepad(options.xinputIndex, error);
+        if (!rumbleXInput) {
+            return failSession(12, "Could not open the APEX4 XInput rumble target: " + error);
+        }
+        if (!rumbleXInput->setRumble(0, 0, error)) {
+            return failSession(12, "Could not establish an APEX4 rumble baseline: " + error);
+        }
+    }
     auto rumbleBridge = options.routeRumble
-        ? std::make_unique<asb::dualsense::RumbleBridge>(*device, hapticConfig)
+        ? (options.spaceStation
+            ? std::make_unique<asb::dualsense::RumbleBridge>(
+                  [&rumbleXInput](std::uint8_t low, std::uint8_t high, std::string& outputError) {
+                      return rumbleXInput->setRumble(low, high, outputError);
+                  }, hapticConfig)
+            : std::make_unique<asb::dualsense::RumbleBridge>(*device, hapticConfig))
         : std::unique_ptr<asb::dualsense::RumbleBridge>{};
     asb::dualsense::VirtualDualSenseOptions backendOptions{};
     backendOptions.viiperExecutable = std::move(options.viiperExecutable);
@@ -1405,7 +1418,10 @@ int commandBridgeTriggers(int argc, char** argv) {
         ? rumbleBridge->stats()
         : asb::dualsense::RumbleBridgeStats{};
     std::string rumbleResetError;
-    const bool rumbleResetOk = !rumbleBridge || device->stopRumble(rumbleResetError);
+    const bool rumbleResetOk = !rumbleBridge ||
+        (options.spaceStation
+            ? rumbleXInput->setRumble(0, 0, rumbleResetError)
+            : device->stopRumble(rumbleResetError));
     if (rumbleResetOk && rumbleResetOnExit) rumbleResetOnExit->dismiss();
     std::string resetError;
     const bool resetOk = options.spaceStation
